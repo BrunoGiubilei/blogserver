@@ -15,11 +15,48 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   });
 
   const { method } = req
-  
+
   switch (method) {
     case 'GET':
-      const usuarios = await prisma.usuario.findMany();
-      res.json(usuarios);
+      // Get all usuarios or a specific usuario if a token is provided
+      const queryToken = req.query.token !== undefined ? req.query.token : '';
+      const endpoint = queryToken[0];
+      const token = queryToken[1];
+      const isValid = jwt.verify(token, 'your-secret-key');
+      
+      if (isValid) {
+        if (token) {
+          const decoded = jwt.decode(token);
+          let id: number = 0;
+      
+          if (decoded instanceof Object && 'id' in decoded) {
+            id = decoded.id;
+          }
+          
+          if (endpoint === 'usuarios') {
+            const usuario = await prisma.usuario.findUnique({ where: { id: id } });
+            let usuariosSemSenha = {};
+
+            if (usuario) {
+              usuariosSemSenha = {
+                id: usuario.id,
+                nome: usuario.nome,
+                email: usuario.email,
+                isAdmin: usuario.isAdmin
+              };
+            }
+
+            res.json(usuariosSemSenha);
+          } else if (endpoint === 'postagens') {
+            const postagens = await prisma.postagens.findMany();
+            const postagensDoUsuario = postagens.filter(postagem => postagem.userId === id);
+
+            res.json(postagensDoUsuario);
+          }
+        }
+      } else {
+        res.status(401).json({ error: 'Token inválido' });
+      }      
       break
     case 'POST':
       // Authenticate a usuario or Create a new usuario
